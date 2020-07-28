@@ -164,24 +164,30 @@ static void _dictReset(dictht *ht)
     ht->used = 0;
 }
 
+//创建新的字典
 /* Create a new hash table */
 dict *dictCreate(dictType *type,
         void *privDataPtr)
-{
+{   
+    //分配内存空间
     dict *d = zmalloc(sizeof(*d));
-
+    //初始化字典
     _dictInit(d,type,privDataPtr);
     return d;
 }
 
 /* Initialize the hash table */
+//初始化字典
 int _dictInit(dict *d, dictType *type,
         void *privDataPtr)
-{
+{   
+    //1.重置哈希表数组(重置并不会给哈希表分配dictEntry数组的内存)
     _dictReset(&d->ht[0]);
     _dictReset(&d->ht[1]);
+    //设置函数簇和私有数据
     d->type = type;
     d->privdata = privDataPtr;
+    //初始化rehashIdx标志和迭代器
     d->rehashidx = -1;
     d->iterators = 0;
     return DICT_OK;
@@ -201,11 +207,14 @@ int dictResize(dict *d)
 }
 
 /* Expand or create the hash table */
+//扩容函数
 int dictExpand(dict *d, unsigned long size)
 {
     dictht n; /* the new hash table */
+    //满足条件的下一个2的倍数
     unsigned long realsize = _dictNextPower(size);
 
+    //新计算的尺寸异常
     /* the size is invalid if it is smaller than the number of
      * elements already inside the hash table */
     if (dictIsRehashing(d) || d->ht[0].used > size)
@@ -214,19 +223,22 @@ int dictExpand(dict *d, unsigned long size)
     /* Rehashing to the same table size is not useful. */
     if (realsize == d->ht[0].size) return DICT_ERR;
 
+    //给新的哈希表分配内存
     /* Allocate the new hash table and initialize all pointers to NULL */
     n.size = realsize;
     n.sizemask = realsize-1;
-    n.table = zcalloc(realsize*sizeof(dictEntry*));
+    n.table = zcalloc(realsize*sizeof(dictEntry*));//数组需要的空间也已经分配
     n.used = 0;
 
     /* Is this the first initialization? If so it's not really a rehashing
      * we just set the first hash table so that it can accept keys. */
+    //对于初始化的情况而言
     if (d->ht[0].table == NULL) {
         d->ht[0] = n;
         return DICT_OK;
     }
 
+    //普通的扩容情况，启用备用哈希表，为rehash做准备
     /* Prepare a second hash table for incremental rehashing */
     d->ht[1] = n;
     d->rehashidx = 0;
@@ -319,6 +331,7 @@ static void _dictRehashStep(dict *d) {
 }
 
 /* Add an element to the target hash table */
+//添加键值对到字典
 int dictAdd(dict *d, void *key, void *val)
 {
     dictEntry *entry = dictAddRaw(d,key);
@@ -343,24 +356,30 @@ int dictAdd(dict *d, void *key, void *val)
  * If key already exists NULL is returned.
  * If key was added, the hash entry is returned to be manipulated by the caller.
  */
+//实际的添加操作
 dictEntry *dictAddRaw(dict *d, void *key)
 {
     int index;
     dictEntry *entry;
     dictht *ht;
-
+    //是否在rehash的过程中 =>走rehash的流程
     if (dictIsRehashing(d)) _dictRehashStep(d);
 
     /* Get the index of the new element, or -1 if
      * the element already exists. */
+    //计算key对应的索引值
     if ((index = _dictKeyIndex(d, key)) == -1)
         return NULL;
 
     /* Allocate the memory and store the new entry */
+    //确定使用哪张哈希表
     ht = dictIsRehashing(d) ? &d->ht[1] : &d->ht[0];
+    //给键值对分配空间
     entry = zmalloc(sizeof(*entry));
+    //添加进哈希表
     entry->next = ht->table[index];
     ht->table[index] = entry;
+    //更新used
     ht->used++;
 
     /* Set the hash entry fields. */
@@ -920,18 +939,22 @@ unsigned long dictScan(dict *d,
 /* ------------------------- private functions ------------------------------ */
 
 /* Expand the hash table if needed */
+//确定是否需要扩容
 static int _dictExpandIfNeeded(dict *d)
 {
     /* Incremental rehashing already in progress. Return. */
+    //正在rehash
     if (dictIsRehashing(d)) return DICT_OK;
 
     /* If the hash table is empty expand it to the initial size. */
+    //对于未初始化的情况 初始化哈希表 默认容量为4
     if (d->ht[0].size == 0) return dictExpand(d, DICT_HT_INITIAL_SIZE);
 
     /* If we reached the 1:1 ratio, and we are allowed to resize the hash
      * table (global setting) or we should avoid it but the ratio between
      * elements/buckets is over the "safe" threshold, we resize doubling
      * the number of buckets. */
+    
     if (d->ht[0].used >= d->ht[0].size &&
         (dict_can_resize ||
          d->ht[0].used/d->ht[0].size > dict_force_resize_ratio))
@@ -960,19 +983,25 @@ static unsigned long _dictNextPower(unsigned long size)
  *
  * Note that if we are in the process of rehashing the hash table, the
  * index is always returned in the context of the second (new) hash table. */
+//计算key对应的索引值
 static int _dictKeyIndex(dict *d, const void *key)
 {
     unsigned int h, idx, table;
     dictEntry *he;
 
     /* Expand the hash table if needed */
+    //决定是否需要扩容（负载因子过高或者未初始化dictEntry都会在这里扩容）
     if (_dictExpandIfNeeded(d) == DICT_ERR)
         return -1;
     /* Compute the key hash value */
+    //计算hash值
     h = dictHashKey(d, key);
+
     for (table = 0; table <= 1; table++) {
+        //根据哈希值计算索引值
         idx = h & d->ht[table].sizemask;
         /* Search if this slot does not already contain the given key */
+        //查看对应的slot上是否有相同key
         he = d->ht[table].table[idx];
         while(he) {
             if (dictCompareKeys(d, key, he->key))
@@ -981,6 +1010,7 @@ static int _dictKeyIndex(dict *d, const void *key)
         }
         if (!dictIsRehashing(d)) break;
     }
+    //返回计算出的索引值
     return idx;
 }
 

@@ -100,6 +100,7 @@ void zslFree(zskiplist *zsl) {
  * The return value of this function is between 1 and ZSKIPLIST_MAXLEVEL
  * (both inclusive), with a powerlaw-alike distribution where higher
  * levels are less likely to be returned. */
+//产生一个随机值作为层数
 int zslRandomLevel(void) {
     int level = 1;
     while ((random()&0xFFFF) < (ZSKIPLIST_P * 0xFFFF))
@@ -107,20 +108,29 @@ int zslRandomLevel(void) {
     return (level<ZSKIPLIST_MAXLEVEL) ? level : ZSKIPLIST_MAXLEVEL;
 }
 
+//在跳表中插入节点
 zskiplistNode *zslInsert(zskiplist *zsl, double score, robj *obj) {
+    //记录查找插入节点在每一层的为止(找最后一个小于插入节点的节点：即新节点会在该节点之后被插入)
     zskiplistNode *update[ZSKIPLIST_MAXLEVEL], *x;
+    //用来记录每一层的rank值
     unsigned int rank[ZSKIPLIST_MAXLEVEL];
     int i, level;
 
     redisAssert(!isnan(score));
+    //头节点
     x = zsl->header;
+    //从高的层往低的层开始查找
     for (i = zsl->level-1; i >= 0; i--) {
         /* store rank that is crossed to reach the insert position */
+        //存放每一层计算的Rank值
         rank[i] = i == (zsl->level-1) ? 0 : rank[i+1];
+
+        //（同层便利未到头）且（下一分值小于目标值 或 下一分值等于目标值但对象序较小）=>层内往后遍历 
         while (x->level[i].forward &&
             (x->level[i].forward->score < score ||
                 (x->level[i].forward->score == score &&
                 compareStringObjects(x->level[i].forward->obj,obj) < 0))) {
+            //记录rank值
             rank[i] += x->level[i].span;
             x = x->level[i].forward;
         }
@@ -130,35 +140,51 @@ zskiplistNode *zslInsert(zskiplist *zsl, double score, robj *obj) {
      * scores, and the re-insertion of score and redis object should never
      * happen since the caller of zslInsert() should test in the hash table
      * if the element is already inside or not. */
+    //随机生成一个层数
     level = zslRandomLevel();
+
+    //如果大于记录的最大层数
     if (level > zsl->level) {
+        //维护高出的层的Rank值和头节点的指针
         for (i = zsl->level; i < level; i++) {
+            //高出的层的rank为0 且节点为header
             rank[i] = 0;
             update[i] = zsl->header;
             update[i]->level[i].span = zsl->length;
         }
         zsl->level = level;
     }
+    //创建跳表节点
     x = zslCreateNode(level,score,obj);
+
+    //维护每层的节点的链接
     for (i = 0; i < level; i++) {
+        //新节点该层的前指针指向要找到节点的前节点
         x->level[i].forward = update[i]->level[i].forward;
+        //找到节点的前指针指向插入节点
         update[i]->level[i].forward = x;
 
+        //rank[0]表示在普通链表中所在的位置
         /* update span covered by update[i] as x is inserted here */
         x->level[i].span = update[i]->level[i].span - (rank[0] - rank[i]);
+        //rank[0]-rank[i] + 1表示前一节点到插入节点的跨度
         update[i]->level[i].span = (rank[0] - rank[i]) + 1;
     }
 
     /* increment span for untouched levels */
+    //如果新插入节点的层高小于最大层高；对于高出新插入节点的层而言，span需要+1
     for (i = level; i < zsl->level; i++) {
         update[i]->level[i].span++;
     }
 
+    //维护新插入节点的前指针
     x->backward = (update[0] == zsl->header) ? NULL : update[0];
+    //如果插入节点后还有节点，修改该节点的前指针为插入节点
     if (x->level[0].forward)
         x->level[0].forward->backward = x;
-    else
+    else //否则修改尾节点
         zsl->tail = x;
+    //更新长度
     zsl->length++;
     return x;
 }
@@ -236,6 +262,7 @@ int zslIsInRange(zskiplist *zsl, zrangespec *range) {
 
 /* Find the first node that is contained in the specified range.
  * Returns NULL when no element is contained in the range. */
+//查找链表中在指定范围内的第一个节点
 zskiplistNode *zslFirstInRange(zskiplist *zsl, zrangespec *range) {
     zskiplistNode *x;
     int i;
@@ -244,11 +271,14 @@ zskiplistNode *zslFirstInRange(zskiplist *zsl, zrangespec *range) {
     if (!zslIsInRange(zsl,range)) return NULL;
 
     x = zsl->header;
+    //从高层往低层找
     for (i = zsl->level-1; i >= 0; i--) {
         /* Go forward while *OUT* of range. */
+        //层内往后找 该节点之后有节点 且 该节点不再范围内
         while (x->level[i].forward &&
             !zslValueGteMin(x->level[i].forward->score,range))
                 x = x->level[i].forward;
+        //找到该层最接近目标的节点，然后往下一层=>使之更加趋近于目标值，直至抵达
     }
 
     /* This is an inner range, so the next node cannot be NULL. */
@@ -256,6 +286,7 @@ zskiplistNode *zslFirstInRange(zskiplist *zsl, zrangespec *range) {
     redisAssert(x != NULL);
 
     /* Check if score <= max. */
+    //校验是否超过范围的最高值
     if (!zslValueLteMax(x->score,range)) return NULL;
     return x;
 }

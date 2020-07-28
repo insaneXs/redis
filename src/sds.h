@@ -38,9 +38,13 @@
 
 typedef char *sds;
 
+//SDS数据结构
 struct sdshdr {
+	//已使用长度(不含特殊结束字符)
     unsigned int len;
+    //剩余长度
     unsigned int free;
+    //底层依靠数组实现
     char buf[];
 };
 

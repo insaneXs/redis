@@ -32,9 +32,13 @@
 #define __INTSET_H
 #include <stdint.h>
 
+//整数集合数据结构
 typedef struct intset {
+    //编码方式
     uint32_t encoding;
+    //集合元素
     uint32_t length;
+    //底层依赖数组实现
     int8_t contents[];
 } intset;
 
