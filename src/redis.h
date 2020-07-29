@@ -177,23 +177,37 @@ typedef long long mstime_t; /* millisecond time type. */
 #define REDIS_CMD_FAST 8192                 /* "F" flag */
 
 /* Object types */
-#define REDIS_STRING 0
+//字符串类型
+#define REDIS_STRING 0 
+//列表类型
 #define REDIS_LIST 1
+//集合类型
 #define REDIS_SET 2
+//有序结合类型
 #define REDIS_ZSET 3
+//哈希
 #define REDIS_HASH 4
 
 /* Objects encoding. Some kind of objects like Strings and Hashes can be
  * internally represented in multiple ways. The 'encoding' field of the object
  * is set to one of this fields for this object. */
+//SDS
 #define REDIS_ENCODING_RAW 0     /* Raw representation */
+//整数
 #define REDIS_ENCODING_INT 1     /* Encoded as integer */
+//哈希表(字典)
 #define REDIS_ENCODING_HT 2      /* Encoded as hash table */
+
 #define REDIS_ENCODING_ZIPMAP 3  /* Encoded as zipmap */
+//双端链表
 #define REDIS_ENCODING_LINKEDLIST 4 /* Encoded as regular linked list */
+//压缩列表
 #define REDIS_ENCODING_ZIPLIST 5 /* Encoded as ziplist */
+//整数集合
 #define REDIS_ENCODING_INTSET 6  /* Encoded as intset */
+//跳表
 #define REDIS_ENCODING_SKIPLIST 7  /* Encoded as skiplist */
+//EMBSTR
 #define REDIS_ENCODING_EMBSTR 8  /* Embedded sds string encoding */
 
 /* Defines related to the dump file format. To store 32 bits lengths for short
@@ -424,11 +438,18 @@ typedef long long mstime_t; /* millisecond time type. */
 #define REDIS_LRU_BITS 24
 #define REDIS_LRU_CLOCK_MAX ((1<<REDIS_LRU_BITS)-1) /* Max value of obj->lru */
 #define REDIS_LRU_CLOCK_RESOLUTION 1000 /* LRU clock resolution in ms */
+
+//对象的数据结构
 typedef struct redisObject {
+    //对象类型
     unsigned type:4;
+    //对象编码
     unsigned encoding:4;
+    //记录lru time
     unsigned lru:REDIS_LRU_BITS; /* lru time (relative to server.lruclock) */
+    //保存引用计数
     int refcount;
+    //指向具体实现的指针
     void *ptr;
 } robj;
 
@@ -626,8 +647,11 @@ typedef struct zskiplist {
     int level;
 } zskiplist;
 
+//有序集合
 typedef struct zset {
+    //指向字典的指针
     dict *dict;
+    //指向跳表的指针
     zskiplist *zsl;
 } zset;
 
