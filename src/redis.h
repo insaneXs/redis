@@ -486,14 +486,23 @@ struct evictionPoolEntry {
 /* Redis database representation. There are multiple databases identified
  * by integers from 0 (the default database) up to the max configured
  * database. The database number is the 'id' field in the structure. */
+
+//数据库结构体
 typedef struct redisDb {
+    //字典，用来数据库的键值对
     dict *dict;                 /* The keyspace for this DB */
+    //字典，保存过期键信息，键是数据库的键， 值是过期时间
     dict *expires;              /* Timeout of keys with a timeout set */
+    //字典，保存有客户端在阻塞等待的键 值是客户端
     dict *blocking_keys;        /* Keys with clients waiting for data (BLPOP) */
+    //
     dict *ready_keys;           /* Blocked keys that received a PUSH */
+    //字典，负责实现数据库事务
     dict *watched_keys;         /* WATCHED keys for MULTI/EXEC CAS */
     struct evictionPoolEntry *eviction_pool;    /* Eviction pool of keys */
+    //数据库ID
     int id;                     /* Database ID */
+    //平均存活时间
     long long avg_ttl;          /* Average TTL, just for stats */
 } redisDb;
 

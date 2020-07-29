@@ -431,17 +431,25 @@ static int dictGenericDelete(dict *d, const void *key, int nofree)
     dictEntry *he, *prevHe;
     int table;
 
+    //未初始化 返回ERR
     if (d->ht[0].size == 0) return DICT_ERR; /* d->ht[0].table is NULL */
+    //如果在Rehash
     if (dictIsRehashing(d)) _dictRehashStep(d);
+    //计算哈希值
     h = dictHashKey(d, key);
 
     for (table = 0; table <= 1; table++) {
+        //计算哈希值和索引
         idx = h & d->ht[table].sizemask;
         he = d->ht[table].table[idx];
+
+        //从对应索引开始查找 找目标元素并删除
         prevHe = NULL;
         while(he) {
+            //找到对应元素
             if (dictCompareKeys(d, key, he->key)) {
                 /* Unlink the element from the list */
+                //从链表中移除
                 if (prevHe)
                     prevHe->next = he->next;
                 else
@@ -450,10 +458,13 @@ static int dictGenericDelete(dict *d, const void *key, int nofree)
                     dictFreeKey(d, he);
                     dictFreeVal(d, he);
                 }
+                //释放空间
                 zfree(he);
+                //哈希表大小减一
                 d->ht[table].used--;
                 return DICT_OK;
             }
+            //往下找
             prevHe = he;
             he = he->next;
         }

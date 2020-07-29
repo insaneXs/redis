@@ -163,7 +163,9 @@ int dbDelete(redisDb *db, robj *key) {
     /* Deleting an entry from the expires dict will not free the sds of
      * the key, because it is shared with the main dictionary. */
     if (dictSize(db->expires) > 0) dictDelete(db->expires,key->ptr);
+    //针对
     if (dictDelete(db->dict,key->ptr) == DICT_OK) {
+        //如果是在集群中，确定slot并删除
         if (server.cluster_enabled) slotToKeyDel(key);
         return 1;
     } else {
@@ -809,26 +811,37 @@ long long getExpire(redisDb *db, robj *key) {
  * AOF and the master->slave link guarantee operation ordering, everything
  * will be consistent even if we allow write operations against expiring
  * keys. */
+//传播过期事件 用来在AOF和主从复制时将命令传播出去
 void propagateExpire(redisDb *db, robj *key) {
+    //创建redisObject数组对象
     robj *argv[2];
 
+    //第一位存放命令
     argv[0] = shared.del;
+    //第二位存放要删除的键对象
     argv[1] = key;
+    //增加引用
     incrRefCount(argv[0]);
     incrRefCount(argv[1]);
 
+    //如果是AOF => 在AOF文件中增加删除命令
     if (server.aof_state != REDIS_AOF_OFF)
         feedAppendOnlyFile(server.delCommand,db->id,argv,2);
+    //主从复制时，向从服务器发送删除命令    
     replicationFeedSlaves(server.slaves,db->id,argv,2);
 
+    //减少引用
     decrRefCount(argv[0]);
     decrRefCount(argv[1]);
 }
 
+//如果需要删除过期键
 int expireIfNeeded(redisDb *db, robj *key) {
+    //或者这个键的过期时间点
     mstime_t when = getExpire(db,key);
     mstime_t now;
 
+    //未设置过期时间 返回
     if (when < 0) return 0; /* No expire for this key */
 
     /* Don't expire anything while loading. It will be done later. */
@@ -854,10 +867,15 @@ int expireIfNeeded(redisDb *db, robj *key) {
     if (now <= when) return 0;
 
     /* Delete the key */
+    //统计信息中维护过期的键
     server.stat_expiredkeys++;
+
+    //传播过期：针对主从多数据库的情况
     propagateExpire(db,key);
+    //触发过期事件
     notifyKeyspaceEvent(REDIS_NOTIFY_EXPIRED,
         "expired",key,db->id);
+    //删除键
     return dbDelete(db,key);
 }
 
@@ -872,18 +890,25 @@ int expireIfNeeded(redisDb *db, robj *key) {
  *
  * unit is either UNIT_SECONDS or UNIT_MILLISECONDS, and is only used for
  * the argv[2] parameter. The basetime is always specified in milliseconds. */
+
 void expireGenericCommand(redisClient *c, long long basetime, int unit) {
+    //从client中获取命令的参数 第一个参数表示操作的键 第二参数表示时间
     robj *key = c->argv[1], *param = c->argv[2];
     long long when; /* unix time in milliseconds when the key will expire. */
 
+    //将时间转成long long类型
     if (getLongLongFromObjectOrReply(c, param, &when, NULL) != REDIS_OK)
         return;
-
+    //统一成毫秒单位
     if (unit == UNIT_SECONDS) when *= 1000;
+
+    //将时间间隔 转成 时间戳节点
     when += basetime;
 
     /* No key, return zero. */
+    //查找对应的key是否存在于DB
     if (lookupKeyRead(c->db,key) == NULL) {
+        //设置响应
         addReply(c,shared.czero);
         return;
     }
@@ -894,6 +919,8 @@ void expireGenericCommand(redisClient *c, long long basetime, int unit) {
      *
      * Instead we take the other branch of the IF statement setting an expire
      * (possibly in the past) and wait for an explicit DEL from the master. */
+
+    //小于当前时间的过期时间 会被视作 调用删除命令
     if (when <= mstime() && !server.loading && !server.masterhost) {
         robj *aux;
 
@@ -909,27 +936,36 @@ void expireGenericCommand(redisClient *c, long long basetime, int unit) {
         addReply(c, shared.cone);
         return;
     } else {
+        //在expires字典中 添加该key和过期时间
         setExpire(c->db,key,when);
+        //设置响应
         addReply(c,shared.cone);
+        //触发键被修改的
         signalModifiedKey(c->db,key);
+        //触发事件
         notifyKeyspaceEvent(REDIS_NOTIFY_GENERIC,"expire",key,c->db->id);
+        //标记dirty值 用于RDB持久化
         server.dirty++;
         return;
     }
 }
 
+//过期命令 EXPIRE
 void expireCommand(redisClient *c) {
     expireGenericCommand(c,mstime(),UNIT_SECONDS);
 }
 
+//过期命令 EXPIREAT
 void expireatCommand(redisClient *c) {
     expireGenericCommand(c,0,UNIT_SECONDS);
 }
 
+//过期命令 PEXPIRE
 void pexpireCommand(redisClient *c) {
     expireGenericCommand(c,mstime(),UNIT_MILLISECONDS);
 }
 
+//过期命令 PEXPIREAT
 void pexpireatCommand(redisClient *c) {
     expireGenericCommand(c,0,UNIT_MILLISECONDS);
 }
