@@ -92,30 +92,39 @@ sds keyspaceEventsFlagsToString(int flags) {
  * 'event' is a C string representing the event name.
  * 'key' is a Redis object representing the key name.
  * 'dbid' is the database ID where the key lives.  */
+//键空间和时间通知函数：底层通过 PUBLISH 的方式向指定频道订阅信息
 void notifyKeyspaceEvent(int type, char *event, robj *key, int dbid) {
+    //频道号
     sds chan;
+    //频道对象和事件对象
     robj *chanobj, *eventobj;
     int len = -1;
     char buf[24];
 
     /* If notifications for this class of events are off, return ASAP. */
+    //确认服务器是否开启相关的事件的通知 没有则直接返回
     if (!(server.notify_keyspace_events & type)) return;
 
     eventobj = createStringObject(event,strlen(event));
 
     /* __keyspace@<db>__:<key> <event> notifications. */
+    //键空间消息处理
     if (server.notify_keyspace_events & REDIS_NOTIFY_KEYSPACE) {
+        //创建类型为 __keyspace@<db>__:<key> 的channel
         chan = sdsnewlen("__keyspace@",11);
         len = ll2string(buf,sizeof(buf),dbid);
         chan = sdscatlen(chan, buf, len);
         chan = sdscatlen(chan, "__:", 3);
         chan = sdscatsds(chan, key->ptr);
+        //创建字符串对象
         chanobj = createObject(REDIS_STRING, chan);
+        //向特定频道 PUBLISH 消息
         pubsubPublishMessage(chanobj, eventobj);
-        decrRefCount(chanobj);
+        decrRefCount(chanobj);//回收字符串对象
     }
 
     /* __keyevente@<db>__:<event> <key> notifications. */
+    //事件消息处理
     if (server.notify_keyspace_events & REDIS_NOTIFY_KEYEVENT) {
         chan = sdsnewlen("__keyevent@",11);
         if (len == -1) len = ll2string(buf,sizeof(buf),dbid);
@@ -126,5 +135,6 @@ void notifyKeyspaceEvent(int type, char *event, robj *key, int dbid) {
         pubsubPublishMessage(chanobj, key);
         decrRefCount(chanobj);
     }
+    //回收eventobj
     decrRefCount(eventobj);
 }
