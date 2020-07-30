@@ -648,6 +648,7 @@ int rdbSaveRio(rio *rdb, int *error) {
     snprintf(magic,sizeof(magic),"REDIS%04d",REDIS_RDB_VERSION);
     if (rdbWriteRaw(rdb,magic,9) == -1) goto werr;
 
+    //遍历所有server下的DB 保存数据库中的键值对
     for (j = 0; j < server.dbnum; j++) {
         redisDb *db = server.db+j;
         dict *d = db->dict;
@@ -723,6 +724,7 @@ int rdbSave(char *filename) {
     int error;
 
     snprintf(tmpfile,256,"temp-%d.rdb", (int) getpid());
+    //先创建一个temp-pid.rdb文件
     fp = fopen(tmpfile,"w");
     if (!fp) {
         redisLog(REDIS_WARNING, "Failed opening .rdb for saving: %s",
@@ -730,7 +732,9 @@ int rdbSave(char *filename) {
         return REDIS_ERR;
     }
 
+    //创建rio(负责写文件的特殊数据结构)
     rioInitWithFile(&rdb,fp);
+    //dump redis中的所有数据
     if (rdbSaveRio(&rdb,&error) == REDIS_ERR) {
         errno = error;
         goto werr;
@@ -743,12 +747,14 @@ int rdbSave(char *filename) {
 
     /* Use RENAME to make sure the DB file is changed atomically only
      * if the generate DB file is ok. */
+    //save成功后， 在将temp文件重命名成.rdb文件
     if (rename(tmpfile,filename) == -1) {
         redisLog(REDIS_WARNING,"Error moving temp DB file on the final destination: %s", strerror(errno));
         unlink(tmpfile);
         return REDIS_ERR;
     }
     redisLog(REDIS_NOTICE,"DB saved on disk");
+    //重置dirty和lastsave值
     server.dirty = 0;
     server.lastsave = time(NULL);
     server.lastbgsave_status = REDIS_OK;
@@ -765,19 +771,23 @@ int rdbSaveBackground(char *filename) {
     pid_t childpid;
     long long start;
 
+    //说明已经有子进程 在执行BGSAVE
     if (server.rdb_child_pid != -1) return REDIS_ERR;
 
     server.dirty_before_bgsave = server.dirty;
     server.lastbgsave_try = time(NULL);
 
     start = ustime();
-    if ((childpid = fork()) == 0) {
+    //创建子进程
+    if ((childpid = fork()) == 0) { //==0 说明是子进程
         int retval;
 
         /* Child */
         closeListeningSockets(0);
         redisSetProcTitle("redis-rdb-bgsave");
+        //保存RDB文件
         retval = rdbSave(filename);
+
         if (retval == REDIS_OK) {
             size_t private_dirty = zmalloc_get_private_dirty();
 
@@ -787,22 +797,26 @@ int rdbSaveBackground(char *filename) {
                     private_dirty/(1024*1024));
             }
         }
+        //退出子进程
         exitFromChild((retval == REDIS_OK) ? 0 : 1);
-    } else {
+    } else { //说明是父进程
         /* Parent */
         server.stat_fork_time = ustime()-start;
         server.stat_fork_rate = (double) zmalloc_used_memory() * 1000000 / server.stat_fork_time / (1024*1024*1024); /* GB per second. */
         latencyAddSampleIfNeeded("fork",server.stat_fork_time/1000);
+        //说明BGSAVE失败
         if (childpid == -1) {
             server.lastbgsave_status = REDIS_ERR;
             redisLog(REDIS_WARNING,"Can't save in background: fork: %s",
                 strerror(errno));
             return REDIS_ERR;
         }
+
         redisLog(REDIS_NOTICE,"Background saving started by pid %d",childpid);
         server.rdb_save_time_start = time(NULL);
         server.rdb_child_pid = childpid;
         server.rdb_child_type = REDIS_RDB_CHILD_TYPE_DISK;
+        //在BGSAVE时禁止DictResize
         updateDictResizePolicy();
         return REDIS_OK;
     }
@@ -1240,17 +1254,19 @@ eoferr: /* unexpected end of file is handled here with a fatal exit */
 
 /* A background saving child (BGSAVE) terminated its work. Handle this.
  * This function covers the case of actual BGSAVEs. */
+//处理BGSAVE 子进程退出的信号 exitcode 应该是子进程exit()的值，bysignal表示是否因为其他信号中断
 void backgroundSaveDoneHandlerDisk(int exitcode, int bysignal) {
+    //无其他信号 且 退出值 为0  =>说明成功
     if (!bysignal && exitcode == 0) {
         redisLog(REDIS_NOTICE,
             "Background saving terminated with success");
         server.dirty = server.dirty - server.dirty_before_bgsave;
         server.lastsave = time(NULL);
         server.lastbgsave_status = REDIS_OK;
-    } else if (!bysignal && exitcode != 0) {
+    } else if (!bysignal && exitcode != 0) { //无其他信号 且退出值不为0 => 说明失败
         redisLog(REDIS_WARNING, "Background saving error");
         server.lastbgsave_status = REDIS_ERR;
-    } else {
+    } else { //被其他信号中断
         mstime_t latency;
 
         redisLog(REDIS_WARNING,
@@ -1264,12 +1280,14 @@ void backgroundSaveDoneHandlerDisk(int exitcode, int bysignal) {
         if (bysignal != SIGUSR1)
             server.lastbgsave_status = REDIS_ERR;
     }
+    //重置server中保存的关于RDB子进程的信号和类型
     server.rdb_child_pid = -1;
     server.rdb_child_type = REDIS_RDB_CHILD_TYPE_NONE;
     server.rdb_save_time_last = time(NULL)-server.rdb_save_time_start;
     server.rdb_save_time_start = -1;
     /* Possibly there are slaves waiting for a BGSAVE in order to be served
      * (the first stage of SYNC is a bulk transfer of dump.rdb) */
+    //处理等待BGSAVE的从节点
     updateSlavesWaitingBgsave((!bysignal && exitcode == 0) ? REDIS_OK : REDIS_ERR, REDIS_RDB_CHILD_TYPE_DISK);
 }
 
