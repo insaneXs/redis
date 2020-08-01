@@ -796,21 +796,32 @@ struct redisServer {
     int daemonize;                  /* True if running as a daemon */
     clientBufferLimitsConfig client_obuf_limits[REDIS_CLIENT_TYPE_COUNT];
     /* AOF persistence */
+
+    /************************************** AOF 相关结构属性 **********************************/
     int aof_state;                  /* REDIS_AOF_(ON|OFF|WAIT_REWRITE) */
+    //AOF 同步策略
     int aof_fsync;                  /* Kind of fsync() policy */
+    //aof文件名
     char *aof_filename;             /* Name of the AOF file */
+    //是否在rewrite能狗fsync
     int aof_no_fsync_on_rewrite;    /* Don't fsync if a rewrite is in prog. */
     int aof_rewrite_perc;           /* Rewrite AOF if % growth is > M and... */
+
+    //触发自动重写相关配置
     off_t aof_rewrite_min_size;     /* the AOF file is at least N bytes. */
     off_t aof_rewrite_base_size;    /* AOF size on latest startup or rewrite. */
     off_t aof_current_size;         /* AOF current size. */
     int aof_rewrite_scheduled;      /* Rewrite once BGSAVE terminates. */
+    //AOF重写进程号
     pid_t aof_child_pid;            /* PID if rewriting process */
     list *aof_rewrite_buf_blocks;   /* Hold changes during an AOF rewrite. */
     sds aof_buf;      /* AOF buffer, written before entering the event loop */
+    //aof文件描述符
     int aof_fd;       /* File descriptor of currently selected AOF file */
+    //选择的DB
     int aof_selected_db; /* Currently selected DB in AOF */
     time_t aof_flush_postponed_start; /* UNIX time of postponed AOF flush */
+    //AOF相关统计
     time_t aof_last_fsync;            /* UNIX time of last fsync() */
     time_t aof_rewrite_time_last;   /* Time used by last AOF rewrite run. */
     time_t aof_rewrite_time_start;  /* Current AOF rewrite start time. */
@@ -830,24 +841,37 @@ struct redisServer {
     int aof_stop_sending_diff;     /* If true stop sending accumulated diffs
                                       to child process. */
     sds aof_child_diff;             /* AOF diff accumulator child side. */
+    /***************************************************************************/
+
+    /************************ RDB 相关属性和数据结构 ******************************/
     /* RDB persistence */
+    //保存更新数
     long long dirty;                /* Changes to DB from the last save */
     long long dirty_before_bgsave;  /* Used to restore dirty on failed BGSAVE */
+    //BGSAVE子进程号
     pid_t rdb_child_pid;            /* PID of RDB saving child */
+    //触发自动BGSAVE的参数
     struct saveparam *saveparams;   /* Save points array for RDB */
     int saveparamslen;              /* Number of saving points */
+    //RDB文件名
     char *rdb_filename;             /* Name of RDB file */
+    //是否开启RDB文件压缩
     int rdb_compression;            /* Use compression in RDB? */
+    //RDB文件校验和
     int rdb_checksum;               /* Use RDB checksum? */
+    //RDB保存的统计信息
     time_t lastsave;                /* Unix time of last successful save */
     time_t lastbgsave_try;          /* Unix time of last attempted bgsave */
     time_t rdb_save_time_last;      /* Time used by last RDB save run. */
     time_t rdb_save_time_start;     /* Current RDB save start time. */
+
     int rdb_child_type;             /* Type of save by active child. */
     int lastbgsave_status;          /* REDIS_OK or REDIS_ERR */
     int stop_writes_on_bgsave_err;  /* Don't allow writes if can't BGSAVE */
     int rdb_pipe_write_result_to_parent; /* RDB pipes used to return the state */
     int rdb_pipe_read_result_from_child; /* of each slave in diskless SYNC. */
+    /******************************************************************************/
+
     /* Propagation of commands in AOF / replication */
     redisOpArray also_propagate;    /* Additional command to propagate. */
     /* Logging */
@@ -1247,13 +1271,18 @@ void stopLoading(void);
 #include "rdb.h"
 
 /* AOF persistence */
+/********************** AOF持久化相关函数 ****************/
+//刷新AOF
 void flushAppendOnlyFile(int force);
 void feedAppendOnlyFile(struct redisCommand *cmd, int dictid, robj **argv, int argc);
 void aofRemoveTempFile(pid_t childpid);
+//后台AOF重写
 int rewriteAppendOnlyFileBackground(void);
+//载入AOF文件
 int loadAppendOnlyFile(char *filename);
 void stopAppendOnly(void);
 int startAppendOnly(void);
+//信号处理器
 void backgroundRewriteDoneHandler(int exitcode, int bysignal);
 void aofRewriteBufferReset(void);
 unsigned long aofRewriteBufferSize(void);
