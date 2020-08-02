@@ -53,44 +53,63 @@
 struct aeEventLoop;
 
 /* Types and data structures */
+//四种类型的事件处理器
 typedef void aeFileProc(struct aeEventLoop *eventLoop, int fd, void *clientData, int mask);
 typedef int aeTimeProc(struct aeEventLoop *eventLoop, long long id, void *clientData);
 typedef void aeEventFinalizerProc(struct aeEventLoop *eventLoop, void *clientData);
 typedef void aeBeforeSleepProc(struct aeEventLoop *eventLoop);
 
 /* File event structure */
+//文件事件结构体
 typedef struct aeFileEvent {
+    //掩码 表示事件类型
     int mask; /* one of AE_(READABLE|WRITABLE) */
+    //读事件处理函数
     aeFileProc *rfileProc;
+    //写事件处理函数
     aeFileProc *wfileProc;
+    //指向相关数据
     void *clientData;
 } aeFileEvent;
 
 /* Time event structure */
+//时间时间结构体
 typedef struct aeTimeEvent {
+    //事件ID
     long long id; /* time event identifier. */
+    //到达事件
     long when_sec; /* seconds */
     long when_ms; /* milliseconds */
+    //时间事件处理函数
     aeTimeProc *timeProc;
+    //时间事件处理函数？
     aeEventFinalizerProc *finalizerProc;
     void *clientData;
+    //指向下一个时间事件
     struct aeTimeEvent *next;
 } aeTimeEvent;
 
 /* A fired event */
+//表示事件触发的结构体
 typedef struct aeFiredEvent {
     int fd;
     int mask;
 } aeFiredEvent;
 
 /* State of an event based program */
+//主事件循环结构体
 typedef struct aeEventLoop {
+    //目前注册在主事件循环中的最大文件描述符
     int maxfd;   /* highest file descriptor currently registered */
+    //当前文件描述符的大小
     int setsize; /* max number of file descriptors tracked */
+    //记录下一个时间事件的ID
     long long timeEventNextId;
     time_t lastTime;     /* Used to detect system clock skew */
+    //
     aeFileEvent *events; /* Registered events */
     aeFiredEvent *fired; /* Fired events */
+    //时间事件链表的表头
     aeTimeEvent *timeEventHead;
     int stop;
     void *apidata; /* This is used for polling API specific data */
@@ -98,21 +117,38 @@ typedef struct aeEventLoop {
 } aeEventLoop;
 
 /* Prototypes */
+//创建主事件循环
 aeEventLoop *aeCreateEventLoop(int setsize);
+//删除主事件循环
 void aeDeleteEventLoop(aeEventLoop *eventLoop);
 void aeStop(aeEventLoop *eventLoop);
+
+//文件事件相关操作
+//创建文件事件
 int aeCreateFileEvent(aeEventLoop *eventLoop, int fd, int mask,
         aeFileProc *proc, void *clientData);
+//删除文件事件
 void aeDeleteFileEvent(aeEventLoop *eventLoop, int fd, int mask);
+//获取一个文件事件
 int aeGetFileEvents(aeEventLoop *eventLoop, int fd);
+
+//时间事件相关操作
+//创建时间事件
 long long aeCreateTimeEvent(aeEventLoop *eventLoop, long long milliseconds,
         aeTimeProc *proc, void *clientData,
         aeEventFinalizerProc *finalizerProc);
+//删除时间事件
 int aeDeleteTimeEvent(aeEventLoop *eventLoop, long long id);
+//事件处理函数
 int aeProcessEvents(aeEventLoop *eventLoop, int flags);
+//等待
 int aeWait(int fd, int mask, long long milliseconds);
+
+//主事件循环入口
 void aeMain(aeEventLoop *eventLoop);
+
 char *aeGetApiName(void);
+
 void aeSetBeforeSleepProc(aeEventLoop *eventLoop, aeBeforeSleepProc *beforesleep);
 int aeGetSetSize(aeEventLoop *eventLoop);
 int aeResizeSetSize(aeEventLoop *eventLoop, int setsize);
