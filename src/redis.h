@@ -1076,7 +1076,9 @@ struct redisCommand {
     char *name;
     //命令处理函数
     redisCommandProc *proc;
+    //命令参数个数
     int arity;
+    //命令标志位
     char *sflags; /* Flags as string representation, one char per flag. */
     int flags;    /* The actual flags, obtained from the 'sflags' field. */
     /* Use a function to determine keys arguments in a command line.
@@ -1086,6 +1088,7 @@ struct redisCommand {
     int firstkey; /* The first argument that's a key (0 = no keys) */
     int lastkey;  /* The last argument that's a key */
     int keystep;  /* The step between first and last key */
+    //统计信息
     long long microseconds, calls;
 };
 

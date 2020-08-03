@@ -638,6 +638,7 @@ static void acceptCommonHandler(int fd, int flags) {
     c->flags |= flags;
 }
 
+//TCP连接处理器
 void acceptTcpHandler(aeEventLoop *el, int fd, void *privdata, int mask) {
     int cport, cfd, max = MAX_ACCEPTS_PER_CALL;
     char cip[REDIS_IP_STR_LEN];
@@ -645,7 +646,9 @@ void acceptTcpHandler(aeEventLoop *el, int fd, void *privdata, int mask) {
     REDIS_NOTUSED(mask);
     REDIS_NOTUSED(privdata);
 
+    //每次最多处理的连接数
     while(max--) {
+        //获取子套接字文件描述符
         cfd = anetTcpAccept(server.neterr, fd, cip, sizeof(cip), &cport);
         if (cfd == ANET_ERR) {
             if (errno != EWOULDBLOCK)
@@ -1231,7 +1234,7 @@ void readQueryFromClient(aeEventLoop *el, int fd, void *privdata, int mask) {
 
         if (remaining < readlen) readlen = remaining;
     }
-
+    
     qblen = sdslen(c->querybuf);
     if (c->querybuf_peak < qblen) c->querybuf_peak = qblen;
     c->querybuf = sdsMakeRoomFor(c->querybuf, readlen);
@@ -1250,6 +1253,7 @@ void readQueryFromClient(aeEventLoop *el, int fd, void *privdata, int mask) {
         freeClient(c);
         return;
     }
+
     if (nread) {
         sdsIncrLen(c->querybuf,nread);
         c->lastinteraction = server.unixtime;
