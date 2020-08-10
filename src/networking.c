@@ -175,6 +175,8 @@ int prepareClientToWrite(redisClient *c) {
 
     /* Only install the handler if not already installed and, in case of
      * slaves, if the client can actually receive writes. */
+
+    //只有在不复制时 或者复制时且从服务器已经时ONLINE的状态时 才会真的关联写文件处理器 否则数据只会先保存到输出缓冲区
     if (c->bufpos == 0 && listLength(c->reply) == 0 &&
         (c->replstate == REDIS_REPL_NONE ||
          (c->replstate == REDIS_REPL_ONLINE && !c->repl_put_online_on_ack)))
