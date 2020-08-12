@@ -250,8 +250,7 @@ typedef long long mstime_t; /* millisecond time type. */
 #define REDIS_BLOCKED (1<<4) /* The client is waiting in a blocking operation */
 #define REDIS_DIRTY_CAS (1<<5) /* Watched keys modified. EXEC will fail. */
 #define REDIS_CLOSE_AFTER_REPLY (1<<6) /* Close after writing entire reply. */
-#define REDIS_UNBLOCKED (1<<7) /* This client was unblocked and is stored in
-                                  server.unblocked_clients */
+#define REDIS_UNBLOCKED (1<<7) /* This client was unblocked and is stored in server.unblocked_clients */
 #define REDIS_LUA_CLIENT (1<<8) /* This is a non connected client used by Lua */
 #define REDIS_ASKING (1<<9)     /* Client issued the ASKING command */
 #define REDIS_CLOSE_ASAP (1<<10)/* Close this client ASAP */
@@ -384,8 +383,7 @@ typedef long long mstime_t; /* millisecond time type. */
 #define UNIT_MILLISECONDS 1
 
 /* SHUTDOWN flags */
-#define REDIS_SHUTDOWN_SAVE 1       /* Force SAVE on SHUTDOWN even if no save
-                                       points are configured. */
+#define REDIS_SHUTDOWN_SAVE 1       /* Force SAVE on SHUTDOWN even if no save points are configured. */
 #define REDIS_SHUTDOWN_NOSAVE 2     /* Don't SAVE on SHUTDOWN. */
 
 /* Command call flags, see call() function */
