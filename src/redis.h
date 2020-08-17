@@ -629,7 +629,9 @@ typedef struct redisClient {
     //保存事务中监视的命令
     list *watched_keys;     /* Keys WATCHED for MULTI/EXEC CAS */
     //保存发布订阅相关信息
+    //客户端订阅的频道信息
     dict *pubsub_channels;  /* channels a client is interested in (SUBSCRIBE) */
+    //客户端订阅的模式信息
     list *pubsub_patterns;  /* patterns a client is interested in (SUBSCRIBE) */
     sds peerid;             /* Cached peer ID. */
 
@@ -1052,8 +1054,11 @@ struct redisServer {
 
     /* Pubsub */
     //pub sub相关信息
+    //记录订阅频道的相关信息 数据结构为字典 其中键是频道 值是客户端链表
     dict *pubsub_channels;  /* Map channels to list of subscribed clients */
+    //记录订阅模式的相关信息 数据结构为链表 链表的节点指向PUBSUBPATTERN的结构体 表示客户端和订阅的模式的关系
     list *pubsub_patterns;  /* A list of pubsub_patterns */
+    //需要负责处理的通知
     int notify_keyspace_events; /* Events to propagate via Pub/Sub. This is an
                                    xor of REDIS_NOTIFY... flags. */
     //集群环境相关配置                               
