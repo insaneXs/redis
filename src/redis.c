@@ -3209,6 +3209,7 @@ struct evictionPoolEntry *evictionPoolAlloc(void) {
  * right. */
 
 #define EVICTION_SAMPLES_ARRAY_SIZE 16
+//更新LRU缓存池
 void evictionPoolPopulate(dict *sampledict, dict *keydict, struct evictionPoolEntry *pool) {
     int j, k, count;
     dictEntry *_samples[EVICTION_SAMPLES_ARRAY_SIZE];
@@ -3216,13 +3217,15 @@ void evictionPoolPopulate(dict *sampledict, dict *keydict, struct evictionPoolEn
 
     /* Try to use a static buffer: this function is a big hit...
      * Note: it was actually measured that this helps. */
+    //确认样本数
     if (server.maxmemory_samples <= EVICTION_SAMPLES_ARRAY_SIZE) {
         samples = _samples;
     } else {
         samples = zmalloc(sizeof(samples[0])*server.maxmemory_samples);
     }
-
+    //根据样本数确定值
     count = dictGetSomeKeys(sampledict,samples,server.maxmemory_samples);
+    //随机选择值 如果LRU更差 则插入池中
     for (j = 0; j < count; j++) {
         unsigned long long idle;
         sds key;
@@ -3245,6 +3248,7 @@ void evictionPoolPopulate(dict *sampledict, dict *keydict, struct evictionPoolEn
         while (k < REDIS_EVICTION_POOL_SIZE &&
                pool[k].key &&
                pool[k].idle < idle) k++;
+        
         if (k == 0 && pool[REDIS_EVICTION_POOL_SIZE-1].key != NULL) {
             /* Can't insert if the element is < the worst element we have
              * and there are no empty buckets. */
@@ -3274,6 +3278,7 @@ void evictionPoolPopulate(dict *sampledict, dict *keydict, struct evictionPoolEn
     if (samples != _samples) zfree(samples);
 }
 
+//释放内存空间
 int freeMemoryIfNeeded(void) {
     size_t mem_used, mem_tofree, mem_freed;
     int slaves = listLength(server.slaves);
@@ -3281,6 +3286,7 @@ int freeMemoryIfNeeded(void) {
 
     /* Remove the size of slaves output buffers and AOF buffer from the
      * count of used memory. */
+    //统计代表从节点的客户端的输出缓冲区占用的内存大小
     mem_used = zmalloc_used_memory();
     if (slaves) {
         listIter li;
@@ -3296,24 +3302,31 @@ int freeMemoryIfNeeded(void) {
                 mem_used -= obuf_bytes;
         }
     }
+    //统计AOF输出缓冲占用的内存大小
     if (server.aof_state != REDIS_AOF_OFF) {
         mem_used -= sdslen(server.aof_buf);
         mem_used -= aofRewriteBufferSize();
     }
 
     /* Check if we are over the memory limit. */
+    //如果已经够了 则不继续
     if (mem_used <= server.maxmemory) return REDIS_OK;
 
+    /****************说明空间依然不够 需要释放数据库键值**************/
+    //没有设置删除策略 出错
     if (server.maxmemory_policy == REDIS_MAXMEMORY_NO_EVICTION)
         return REDIS_ERR; /* We need to free memory, but policy forbids. */
 
     /* Compute how much memory we need to free. */
+    //计算还需要释放多少空间
     mem_tofree = mem_used - server.maxmemory;
     mem_freed = 0;
     latencyStartMonitor(latency);
+
     while (mem_freed < mem_tofree) {
         int j, k, keys_freed = 0;
 
+        //遍历服务器的每个数据库实例
         for (j = 0; j < server.dbnum; j++) {
             long bestval = 0; /* just to prevent warning */
             sds bestkey = NULL;
@@ -3321,16 +3334,17 @@ int freeMemoryIfNeeded(void) {
             redisDb *db = server.db+j;
             dict *dict;
 
+            //如果删除策略是针对全键的 直接从数据库字典中找
             if (server.maxmemory_policy == REDIS_MAXMEMORY_ALLKEYS_LRU ||
                 server.maxmemory_policy == REDIS_MAXMEMORY_ALLKEYS_RANDOM)
-            {
+            { 
                 dict = server.db[j].dict;
-            } else {
+            } else {//否则说明是针对过期键做的删除策略 否则从过期键中找
                 dict = server.db[j].expires;
             }
             if (dictSize(dict) == 0) continue;
 
-            /* volatile-random and allkeys-random policy */
+            /* volatile-random and allkeys-random policy */ //随机回收过期键 或是 随机回收所有键（LRU无关）
             if (server.maxmemory_policy == REDIS_MAXMEMORY_ALLKEYS_RANDOM ||
                 server.maxmemory_policy == REDIS_MAXMEMORY_VOLATILE_RANDOM)
             {
@@ -3340,11 +3354,12 @@ int freeMemoryIfNeeded(void) {
 
             /* volatile-lru and allkeys-lru policy */
             else if (server.maxmemory_policy == REDIS_MAXMEMORY_ALLKEYS_LRU ||
-                server.maxmemory_policy == REDIS_MAXMEMORY_VOLATILE_LRU)
+                server.maxmemory_policy == REDIS_MAXMEMORY_VOLATILE_LRU) //过期LRU或是所有LRU
             {
                 struct evictionPoolEntry *pool = db->eviction_pool;
 
                 while(bestkey == NULL) {
+                    //更新池  再从池里删除空闲时间最大的
                     evictionPoolPopulate(dict, db->dict, db->eviction_pool);
                     /* Go backward from best to worst element to evict. */
                     for (k = REDIS_EVICTION_POOL_SIZE-1; k >= 0; k--) {
@@ -3375,7 +3390,8 @@ int freeMemoryIfNeeded(void) {
             }
 
             /* volatile-ttl */
-            else if (server.maxmemory_policy == REDIS_MAXMEMORY_VOLATILE_TTL) {
+            else if (server.maxmemory_policy == REDIS_MAXMEMORY_VOLATILE_TTL) { //如果是已TTL作为释放标准
+                //抽取一定样板 删除其中TTL最小的键
                 for (k = 0; k < server.maxmemory_samples; k++) {
                     sds thiskey;
                     long thisval;
@@ -3394,6 +3410,7 @@ int freeMemoryIfNeeded(void) {
             }
 
             /* Finally remove the selected key. */
+            //释放选中的键
             if (bestkey) {
                 long long delta;
 

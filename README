@@ -17,7 +17,7 @@
 - RDB持久化 rdb.h / rdb.c RDB持久化实现  
 - AOF持久化 aof.c AOF持久化实现  
 - redis服务器启动流程、时间循环 ae.h / ae.c / redis.h / redis.c  
-- 客户端 redis.h  
+- 客户端 redis.h  / networking.c
 
 ### 多机数据库  
 - 复制 redis.h / replication.c  复制流程/命令处理
@@ -26,3 +26,4 @@
 
 ### 独立部分的功能实现  
 - 订阅/发布 pubsub.c
+- 事务 multi.c

@@ -499,8 +499,9 @@ typedef struct redisDb {
     dict *blocking_keys;        /* Keys with clients waiting for data (BLPOP) */
     //
     dict *ready_keys;           /* Blocked keys that received a PUSH */
-    //字典，负责实现数据库事务
+    //字典，负责实现数据库事务 键是被监视的键 值是监视该键的客户端链表
     dict *watched_keys;         /* WATCHED keys for MULTI/EXEC CAS */
+    //淘汰池 用于maxmemory时从中选出要释放的键
     struct evictionPoolEntry *eviction_pool;    /* Eviction pool of keys */
     //数据库ID
     int id;                     /* Database ID */
@@ -509,14 +510,21 @@ typedef struct redisDb {
 } redisDb;
 
 /* Client MULTI/EXEC state */
+//事务保存的命令相关信息
 typedef struct multiCmd {
+    //参数数组
     robj **argv;
+    //参数个数
     int argc;
+    //命名函数
     struct redisCommand *cmd;
 } multiCmd;
 
+//事务队列数据结构
 typedef struct multiState {
+    //如果的命令
     multiCmd *commands;     /* Array of MULTI commands */
+    //队列的个数
     int count;              /* Total number of MULTI commands */
     int minreplicas;        /* MINREPLICAS for synchronous replication */
     time_t minreplicas_timeout; /* MINREPLICAS timeout as unixtime. */
@@ -620,13 +628,13 @@ typedef struct redisClient {
     int slave_listening_port; /* As configured with: SLAVECONF listening-port */
     int slave_capa;         /* Slave capabilities: SLAVE_CAPA_* bitwise OR. */
 
-    //客户端的事务标志
+    //客户端关联的事务队列
     multiState mstate;      /* MULTI/EXEC state */
     int btype;              /* Type of blocking op if REDIS_BLOCKED. */
     //客户端的阻塞状态
     blockingState bpop;     /* blocking state */
     long long woff;         /* Last write global replication offset. */
-    //保存事务中监视的命令
+    //保存事务中监视的命令 
     list *watched_keys;     /* Keys WATCHED for MULTI/EXEC CAS */
     //保存发布订阅相关信息
     //客户端订阅的频道信息
@@ -1018,9 +1026,13 @@ struct redisServer {
     int get_ack_from_slaves;            /* If true we send REPLCONF GETACK. */
 
     /* Limits */
+    //最大客户端数
     unsigned int maxclients;            /* Max number of simultaneous clients */
+    //最大内存
     unsigned long long maxmemory;   /* Max number of memory bytes to use */
+    //最大内存释放策略
     int maxmemory_policy;           /* Policy for key eviction */
+    //最大内存样本采集
     int maxmemory_samples;          /* Pricision of random sampling */
 
     //记录被阻塞的客户端的相关信息
