@@ -27,3 +27,4 @@
 ### 独立部分的功能实现  
 - 订阅/发布 pubsub.c
 - 事务 multi.c
+- lua脚本 scripts.c

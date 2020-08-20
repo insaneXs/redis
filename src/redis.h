@@ -1086,18 +1086,28 @@ struct redisServer {
 
     //Lua脚本相关执行环境                                      
     /* Scripting */
+    //lua环境
     lua_State *lua; /* The Lua interpreter. We use just one for all clients */
+    //lua对应的伪客户端
     redisClient *lua_client;   /* The "fake client" to query Redis from Lua */
+    //用来判断是否正在执行lua脚本
     redisClient *lua_caller;   /* The client running EVAL right now, or NULL */
+    //lua脚本字典 键是脚本SHA1校验和  值是脚本内容
     dict *lua_scripts;         /* A dictionary of SHA1 -> Lua scripts */
+    //lua运行时间限制
     mstime_t lua_time_limit;  /* Script timeout in milliseconds */
+    //lua开始运行的时间
     mstime_t lua_time_start;  /* Start time of script, milliseconds time */
+    //标记脚本是否执行过写
     int lua_write_dirty;  /* True if a write command was called during the
                              execution of the current script. */
+    //标记脚本是否执行过随机
     int lua_random_dirty; /* True if a random command was called during the
                              execution of the current script. */
+    //脚本是否超时
     int lua_timedout;     /* True if we reached the time limit for script
                              execution. */
+    //是否杀掉脚本
     int lua_kill;         /* Kill the script if true. */
 
     /* Latency monitor */
